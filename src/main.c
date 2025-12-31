@@ -1,100 +1,157 @@
+#include <openssl/sha.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <zconf.h>
 #include <zlib.h>
+#include <openssl/ssl.h>
+
+bool equal(char* s1, char* s2) {
+    return strcmp(s1, s2) == 0;
+}
+
+void command_init() {
+    if (mkdir(".git", 0755) == -1 || 
+        mkdir(".git/objects", 0755) == -1 || 
+        mkdir(".git/refs", 0755) == -1) {
+        fprintf(stderr, "Failed to create directories: %s\n", strerror(errno));
+        exit(1);
+    }
+    
+    FILE *headFile = fopen(".git/HEAD", "w");
+    if (headFile == NULL) {
+        fprintf(stderr, "Failed to create .git/HEAD file: %s\n", strerror(errno));
+        exit(1);
+    }
+    fprintf(headFile, "ref: refs/heads/main\n");
+    fclose(headFile);
+    
+    printf("Initialized git directory\n");
+}
+
+void command_cat_file(char* flag, char* blob_sha) {
+    char file_path[128];
+    sprintf(file_path, ".git/objects/%.2s/%s", blob_sha, (blob_sha + 2));
+
+    FILE *fp = fopen(file_path, "r");
+    if (!fp) {
+        fprintf(stderr, "Error opening file!");
+        exit(65);
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+
+    Bytef* compressed_data = malloc(file_size);
+    fread(compressed_data, 1, file_size, fp);
+    fclose(fp);
+
+    uLongf decompressed_size = 4096;
+    Bytef* decompressed_data = malloc(decompressed_size);
+
+    int res = uncompress(decompressed_data, &decompressed_size, compressed_data, file_size);
+    
+    if (res == Z_BUF_ERROR) {
+        fprintf(stderr, "Buffer error occurred!");
+        exit(70);
+    }
+
+    if (res != Z_OK) {
+        fprintf(stderr, "Decompression failed!");
+        exit(90);
+    }
+
+    char* ptr = memchr(decompressed_data, '\0', decompressed_size) + 1;
+    size_t content_length = decompressed_size - (ptr - (char*)decompressed_data);
+
+    fwrite(ptr, 1, content_length, stdout);
+
+    free(compressed_data);
+    free(decompressed_data);
+}
+
+void command_hash_object(char* flag, char* file_path) {
+    FILE *fp = fopen(file_path, "rb");
+    if (!fp) {
+        fprintf(stderr, "Failed to open file");
+        exit(78);
+    }
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+
+    char *content = malloc(file_size);
+    fread(content, 1, file_size, fp);
+    fclose(fp);
+
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "blob %ld", file_size);
+
+    int full_len = header_len + 1 + file_size;
+    unsigned char* buffer = malloc(full_len);
+    memcpy(buffer, header, header_len);
+    buffer[header_len] = '\0';
+    memcpy(buffer + header_len + 1, content, file_size);
+
+    unsigned char sha1_hash[SHA_DIGEST_LENGTH];
+    SHA1(buffer, full_len, sha1_hash);
+
+    char sha1_hex[41];
+    for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
+        sprintf(sha1_hex + i * 2, "%02x", sha1_hash[i]);
+    }
+    sha1_hex[40] = '\0';
+
+    uLong compressed_size = compressBound(full_len);
+    Bytef* compressed_data = malloc(compressed_size);
+
+    int status = compress(compressed_data, &compressed_size, (Bytef*)buffer, full_len);
+    if (status != Z_OK) {
+        fprintf(stderr, "Compression failed!");
+        exit(99);
+    }
+
+    char dir[64];
+    snprintf(dir, sizeof(dir), ".git/objects/%.2s", sha1_hex);
+    mkdir(dir, 0755);
+
+    char file[128];
+    sprintf(file, ".git/objects/%.2s/%s", sha1_hex, sha1_hex + 2);
+
+    FILE* ffp = fopen(file, "wb");
+
+    fwrite(compressed_data, 1, compressed_size, ffp);
+    fclose(ffp);
+
+    printf("%s\n", sha1_hex);
+
+    free(buffer);
+    free(compressed_data);
+    free(content);
+}
 
 int main(int argc, char *argv[]) {
-    // Disable output buffering
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
 
     if (argc < 2) {
-        fprintf(stderr, "Usage: ./program.sh <command> [<args>]\n");
+        fprintf(stderr, "Usage: ./your_program.sh <command> [<args>]\n");
         return 1;
     }
     
-    const char *command = argv[1];
+    char *command = argv[1];
     
-    if (strcmp(command, "init") == 0) {
-        // You can use print statements as follows for debugging, they'll be visible when running tests.
-        fprintf(stderr, "Logs from your program will appear here!\n");
-
-        // TODO: Uncomment the code below to pass the first stage
-        // 
-         if (mkdir(".git", 0755) == -1 || 
-             mkdir(".git/objects", 0755) == -1 || 
-             mkdir(".git/refs", 0755) == -1) {
-             fprintf(stderr, "Failed to create directories: %s\n", strerror(errno));
-             return 1;
-         }
-         
-         FILE *headFile = fopen(".git/HEAD", "w");
-         if (headFile == NULL) {
-             fprintf(stderr, "Failed to create .git/HEAD file: %s\n", strerror(errno));
-             return 1;
-         }
-         fprintf(headFile, "ref: refs/heads/main\n");
-         fclose(headFile);
-         
-         printf("Initialized git directory\n");
-      } else if (strcmp(command, "cat-file") == 0) {
-    if (argc != 4 || strcmp(argv[2], "-p") != 0) {
-      fprintf(stderr, "Usage: ./your_program.sh cat-file -p <hash>\n");
-      return 1;
-    }
-    const char *object_hash = argv[3];
-    char object_path[256];
-    sprintf(object_path, ".git/objects/%c%c/%s", object_hash[0], object_hash[1],
-            object_hash + 2);
-    FILE *objectFile;
-    if ((objectFile = fopen(object_path, "rb")) == NULL) {
-      fprintf(stderr, "Failed to open object file: %s\n", strerror(errno));
-      return 1;
-    }
-    // Get file size
-    fseek(objectFile, 0, SEEK_END);
-    long size = ftell(objectFile);
-    fseek(objectFile, 0, SEEK_SET);
-    // Read the file content
-    unsigned char *compressed_data = malloc(size);
-    if ((fread(compressed_data, 1, size, objectFile)) != size) {
-      fprintf(stderr, "Failed to read object file: %s\n", strerror(errno));
-      fclose(objectFile);
-      free(compressed_data);
-      return 1;
-    }
-    fclose(objectFile);
-    // Decompress the data
-    unsigned char decompressed[65536]; // Adjust as needed
-    z_stream stream = {
-        .next_in = compressed_data,
-        .avail_in = size,
-        .next_out = decompressed,
-        .avail_out = sizeof(decompressed),
-    };
-    if (inflateInit(&stream) != Z_OK) {
-      fprintf(stderr, "inflateInit failed\n");
-      free(compressed_data);
-      return 1;
-    }
-    if (inflate(&stream, Z_FINISH) != Z_STREAM_END) {
-      fprintf(stderr, "inflate failed\n");
-      inflateEnd(&stream);
-      free(compressed_data);
-      return 1;
-    }
-    inflateEnd(&stream);
-    free(compressed_data);
-    // Print decompressed content after the header (e.g., "blob 12\0...")
-    unsigned char *content = memchr(decompressed, 0, stream.total_out);
-    if (!content) {
-      fprintf(stderr, "Invalid object format\n");
-      return 1;
-    }
-    content++;
-    fwrite(content, 1, stream.total_out - (content - decompressed), stdout);
+    if (equal(command, "init")) {
+        command_init();
+    } else if (equal(command, "cat-file")) {
+        command_cat_file(argv[2], argv[3]);
+    } else if (equal(command, "hash-object")) {
+        command_hash_object(argv[2], argv[3]);
     } else {
         fprintf(stderr, "Unknown command %s\n", command);
         return 1;
