@@ -1,201 +1,161 @@
-Your Task
-In-progress
-Share Feedback
-Medium
-In this stage, you'll add support for reading a blob using the git cat-file command.
-
-Git objects
-Click to expand/collapse
-In this challenge, we'll deal with three Git objects:
-
-Blobs (This stage)
-
-These are used to store file data.
-Blobs only store the contents of a file, not its name or permissions.
-Trees (Future stages)
-
-These are used to store directory structures.
-The information stored can include things like what files/directories are in a tree, their names and permissions.
-Commits (Future stages)
-
-These are used to store commit data.
-The information stored can include things like the commit message, author, committer, parent commit(s) and more.
-All Git objects are identifiable by a 40-character SHA-1 hash, also known as the "object hash".
-
-Here's an example of an object hash: e88f7a929cd70b0274c4ea33b209c97fa845fdbc.
-
-Git Object Storage
-Click to expand/collapse
-Git objects are stored in the .git/objects directory. The path to an object is derived from its hash.
-
-The path for the object with the hash e88f7a929cd70b0274c4ea33b209c97fa845fdbc would be:
-
-  .git/objects/e8/8f7a929cd70b0274c4ea33b209c97fa845fdbc
-You'll see that the file isn't placed directly in the .git/objects directory. Instead, it's placed in a directory named with the first two characters of the object's hash. The remaining 38 characters are used as the file name.
-
-Each Git object has its own format for storage. We'll look at how Blobs are stored in this stage, and we'll cover other objects in future stages.
-
-Blob Object Storage
-Click to expand/collapse
-Each Git Blob is stored as a separate file in the .git/objects directory. The file contains a header and the contents of the blob object, compressed using Zlib.
-
-The format of a blob object file looks like this (after Zlib decompression):
-
-  blob <size>\0<content>
-<size> is the size of the content (in bytes)
-
-\0 is a null byte
-
-<content> is the actual content of the file
-
-For example, if the contents of a file are hello world, the blob object file would look like this (after Zlib decompression):
-
-  blob 11\0hello world
-The cat-file command
-Click to expand/collapse
-Tests
-The tester will first initialize a new git repository using your program, and then insert a blob with random contents into the .git/objects directory:
-
-$ mkdir /tmp/test_dir && cd /tmp/test_dir
-$ /path/to/your_program.sh init
-$ echo "hello world" > test.txt # The tester will use a random string, not "hello world"
-$ git hash-object -w test.txt
-3b18e512dba79e4c8300dd08aeb37f8e728b8dad
-After that, it'll run your program like this:
-
-$ /path/to/your_program.sh cat-file -p 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
-hello world
-The tester will verify that the output of your program matches the contents of the blob.
-
-Notes
-In many programming languages the default print function (like fmt.Println) will append a newline to the output. The output of cat-file must not contain a newline at the end, so you might need to use a different function to print the output.
-
-Keep in mind that Git uses Zlib to compress objects. Many languages have utils for dealing with zlib data in their standard library. If not, you might need to use a third-party library to read these compressed files.
-
-How to pass this stage
-Unlike stage 1, your repository doesn't contain commented code to pass this stage.
-
-1
-Write code to pass this stage
-Head over to your editor / IDE and implement your solution.
-
-If you want a quick look at what functions to use or how to structure your code, we recommend looking at Code Examples.
-
-2
-Run tests
-To run tests, make changes to your code and run the following commands:
-
-git
-codecrafters cli
-
-copy
-git add .
-git commit --allow-empty -m "[any message]"
-git push origin master
-
-answer:
-
-#include <errno.h>
+#include <openssl/sha.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <zconf.h>
 #include <zlib.h>
+#include <openssl/ssl.h>
 
-int main(int argc, char *argv[]) {
-  // Disable output buffering
-  setbuf(stdout, NULL);
-  setbuf(stderr, NULL);
+bool equal(char* s1, char* s2) {
+    return strcmp(s1, s2) == 0;
+}
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: ./program.sh <command> [<args>]\n");
-    return 1;
-  }
-
-  const char *command = argv[1];
-
-  if (strcmp(command, "init") == 0) {
-    // You can use print statements as follows for debugging, they'll be visible
-    // when running tests.
-    fprintf(stderr, "Logs from your program will appear here!\n");
-
-    // TODO: Uncomment the code below to pass the first stage
-    //
-    if (mkdir(".git", 0755) == -1 || mkdir(".git/objects", 0755) == -1 ||
+void command_init() {
+    if (mkdir(".git", 0755) == -1 || 
+        mkdir(".git/objects", 0755) == -1 || 
         mkdir(".git/refs", 0755) == -1) {
-      fprintf(stderr, "Failed to create directories: %s\n", strerror(errno));
-      return 1;
+        fprintf(stderr, "Failed to create directories: %s\n", strerror(errno));
+        exit(1);
     }
-
+    
     FILE *headFile = fopen(".git/HEAD", "w");
     if (headFile == NULL) {
-      fprintf(stderr, "Failed to create .git/HEAD file: %s\n", strerror(errno));
-      return 1;
+        fprintf(stderr, "Failed to create .git/HEAD file: %s\n", strerror(errno));
+        exit(1);
     }
     fprintf(headFile, "ref: refs/heads/main\n");
     fclose(headFile);
-
+    
     printf("Initialized git directory\n");
-  } else if (strcmp(command, "cat-file") == 0) {
-    if (argc != 4 || strcmp(argv[2], "-p") != 0) {
-      fprintf(stderr, "Usage: ./your_program.sh cat-file -p <hash>\n");
-      return 1;
-    }
-    const char *object_hash = argv[3];
-    char object_path[256];
-    sprintf(object_path, ".git/objects/%c%c/%s", object_hash[0], object_hash[1],
-            object_hash + 2);
-    FILE *objectFile;
-    if ((objectFile = fopen(object_path, "rb")) == NULL) {
-      fprintf(stderr, "Failed to open object file: %s\n", strerror(errno));
-      return 1;
-    }
-    // Get file size
-    fseek(objectFile, 0, SEEK_END);
-    long size = ftell(objectFile);
-    fseek(objectFile, 0, SEEK_SET);
-    // Read the file content
-    unsigned char *compressed_data = malloc(size);
-    if ((fread(compressed_data, 1, size, objectFile)) != size) {
-      fprintf(stderr, "Failed to read object file: %s\n", strerror(errno));
-      fclose(objectFile);
-      free(compressed_data);
-      return 1;
-    }
-    fclose(objectFile);
-    // Decompress the data
-    unsigned char decompressed[65536]; // Adjust as needed
-    z_stream stream = {
-        .next_in = compressed_data,
-        .avail_in = size,
-        .next_out = decompressed,
-        .avail_out = sizeof(decompressed),
-    };
-    if (inflateInit(&stream) != Z_OK) {
-      fprintf(stderr, "inflateInit failed\n");
-      free(compressed_data);
-      return 1;
-    }
-    if (inflate(&stream, Z_FINISH) != Z_STREAM_END) {
-      fprintf(stderr, "inflate failed\n");
-      inflateEnd(&stream);
-      free(compressed_data);
-      return 1;
-    }
-    inflateEnd(&stream);
-    free(compressed_data);
-    // Print decompressed content after the header (e.g., "blob 12\0...")
-    unsigned char *content = memchr(decompressed, 0, stream.total_out);
-    if (!content) {
-      fprintf(stderr, "Invalid object format\n");
-      return 1;
-    }
-    content++;
-    fwrite(content, 1, stream.total_out - (content - decompressed), stdout);
-  } else {
-    fprintf(stderr, "Unknown command %s\n", command);
-    return 1;
-  }
+}
 
-  return 0;
+void command_cat_file(char* flag, char* blob_sha) {
+    char file_path[128];
+    sprintf(file_path, ".git/objects/%.2s/%s", blob_sha, (blob_sha + 2));
+
+    FILE *fp = fopen(file_path, "r");
+    if (!fp) {
+        fprintf(stderr, "Error opening file!");
+        exit(65);
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+
+    Bytef* compressed_data = malloc(file_size);
+    fread(compressed_data, 1, file_size, fp);
+    fclose(fp);
+
+    uLongf decompressed_size = 4096;
+    Bytef* decompressed_data = malloc(decompressed_size);
+
+    int res = uncompress(decompressed_data, &decompressed_size, compressed_data, file_size);
+    
+    if (res == Z_BUF_ERROR) {
+        fprintf(stderr, "Buffer error occurred!");
+        exit(70);
+    }
+
+    if (res != Z_OK) {
+        fprintf(stderr, "Decompression failed!");
+        exit(90);
+    }
+
+    char* ptr = memchr(decompressed_data, '\0', decompressed_size) + 1;
+    size_t content_length = decompressed_size - (ptr - (char*)decompressed_data);
+
+    fwrite(ptr, 1, content_length, stdout);
+
+    free(compressed_data);
+    free(decompressed_data);
+}
+
+void command_hash_object(char* flag, char* file_path) {
+    FILE *fp = fopen(file_path, "rb");
+    if (!fp) {
+        fprintf(stderr, "Failed to open file");
+        exit(78);
+    }
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+
+    char *content = malloc(file_size);
+    fread(content, 1, file_size, fp);
+    fclose(fp);
+
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "blob %ld", file_size);
+
+    int full_len = header_len + 1 + file_size;
+    unsigned char* buffer = malloc(full_len);
+    memcpy(buffer, header, header_len);
+    buffer[header_len] = '\0';
+    memcpy(buffer + header_len + 1, content, file_size);
+
+    unsigned char sha1_hash[SHA_DIGEST_LENGTH];
+    SHA1(buffer, full_len, sha1_hash);
+
+    char sha1_hex[41];
+    for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
+        sprintf(sha1_hex + i * 2, "%02x", sha1_hash[i]);
+    }
+    sha1_hex[40] = '\0';
+
+    uLong compressed_size = compressBound(full_len);
+    Bytef* compressed_data = malloc(compressed_size);
+
+    int status = compress(compressed_data, &compressed_size, (Bytef*)buffer, full_len);
+    if (status != Z_OK) {
+        fprintf(stderr, "Compression failed!");
+        exit(99);
+    }
+
+    char dir[64];
+    snprintf(dir, sizeof(dir), ".git/objects/%.2s", sha1_hex);
+    mkdir(dir, 0755);
+
+    char file[128];
+    sprintf(file, ".git/objects/%.2s/%s", sha1_hex, sha1_hex + 2);
+
+    FILE* ffp = fopen(file, "wb");
+
+    fwrite(compressed_data, 1, compressed_size, ffp);
+    fclose(ffp);
+
+    printf("%s\n", sha1_hex);
+
+    free(buffer);
+    free(compressed_data);
+    free(content);
+}
+
+int main(int argc, char *argv[]) {
+    setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
+
+    if (argc < 2) {
+        fprintf(stderr, "Usage: ./your_program.sh <command> [<args>]\n");
+        return 1;
+    }
+    
+    char *command = argv[1];
+    
+    if (equal(command, "init")) {
+        command_init();
+    } else if (equal(command, "cat-file")) {
+        command_cat_file(argv[2], argv[3]);
+    } else if (equal(command, "hash-object")) {
+        command_hash_object(argv[2], argv[3]);
+    } else {
+        fprintf(stderr, "Unknown command %s\n", command);
+        return 1;
+    }
+    
+    return 0;
 }
