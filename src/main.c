@@ -135,6 +135,45 @@ void command_hash_object(char* flag, char* file_path) {
     free(content);
 }
 
+void command_ls_tree(char* flag, char* tree_sha) {
+    char path[128];
+    sprintf(path, ".git/objects/%.2s/%s", tree_sha, tree_sha + 2);
+
+    FILE *fp = fopen(path, "rb");
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+
+    Bytef* content = malloc(file_size);
+    fread(content, 1, file_size, fp);
+    fclose(fp);
+
+    uLongf buffer_size = 4096;
+    Bytef* buffer = malloc(buffer_size);
+
+    int status = uncompress(buffer, &buffer_size, content, file_size);
+
+    if (status == Z_BUF_ERROR) {
+        fprintf(stderr, "Buffer error!");
+        exit(102);
+    }
+
+    if (status != Z_OK) {
+        fprintf(stderr, "Decompression failed!");
+        exit(897);
+    }
+    free(content);
+
+    Bytef* end = buffer + buffer_size;
+    Bytef* ptr = memchr(buffer, '\0', buffer_size) + 1;
+    while (ptr != end) {
+        Bytef* name = memchr(ptr, ' ', end - ptr) + 1;
+        printf("%s\n", name);
+        Bytef* nul = memchr(name, '\0', end - name);
+        ptr = nul + 21;
+    }
+}
+
 int main(int argc, char *argv[]) {
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
@@ -152,6 +191,8 @@ int main(int argc, char *argv[]) {
         command_cat_file(argv[2], argv[3]);
     } else if (equal(command, "hash-object")) {
         command_hash_object(argv[2], argv[3]);
+    } else if (equal(command, "ls-tree")) {
+        command_ls_tree(argv[2], argv[3]);
     } else {
         fprintf(stderr, "Unknown command %s\n", command);
         return 1;
