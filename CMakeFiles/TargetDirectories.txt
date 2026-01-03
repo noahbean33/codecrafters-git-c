@@ -1,3 +1,0 @@
-/Users/devinlynch/Desktop/Repos/codecrafters-git-c/CMakeFiles/git.dir
-/Users/devinlynch/Desktop/Repos/codecrafters-git-c/CMakeFiles/edit_cache.dir
-/Users/devinlynch/Desktop/Repos/codecrafters-git-c/CMakeFiles/rebuild_cache.dir
