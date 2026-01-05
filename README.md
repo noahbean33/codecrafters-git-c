@@ -2,11 +2,11 @@
 
 A functional implementation of core Git version control system commands, built from scratch in C. This project demonstrates proficiency in systems programming, file I/O, data compression, cryptographic hashing, and network protocols.
 
-## 🎯 Project Overview
+## Project Overview
 
 This project is a custom implementation of Git that replicates the fundamental functionality of the industry-standard version control system. It handles object storage, compression, SHA-1 hashing, tree structures, and remote repository operations—all written in C without relying on the official Git libraries.
 
-## ✨ Features Implemented
+## Features Implemented
 
 ### Core Git Operations
 - **`init`** - Initialize a new Git repository with proper directory structure (.git/objects, .git/refs, HEAD)
@@ -38,7 +38,7 @@ This project is a custom implementation of Git that replicates the fundamental f
 - Recursive tree traversal algorithms
 - Dynamic memory management with proper cleanup
 
-## 🛠️ Technical Stack
+## Technical Stack
 
 - **Language:** C (C99 standard)
 - **Build System:** CMake
@@ -48,7 +48,7 @@ This project is a custom implementation of Git that replicates the fundamental f
   - libcurl - HTTP client for network operations
 - **Package Manager:** vcpkg
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 src/
@@ -59,7 +59,7 @@ src/
 └── clone.c      - Remote repository cloning and pack file processing
 ```
 
-## 🔧 Building & Running
+## Building & Running
 
 ```bash
 # Build the project
@@ -75,34 +75,5 @@ cmake --build build
 ./your_program.sh commit-tree <tree> -m "message"
 ./your_program.sh clone <url> <directory>
 ```
-
-## 💡 Key Learning Outcomes
-
-- **Low-level Systems Programming:** Direct file manipulation, memory management, and system calls
-- **Data Structures:** Implementing trees, dynamic arrays, and custom object formats
-- **Compression Algorithms:** Working with zlib for efficient data storage
-- **Cryptography:** Understanding and implementing SHA-1 hashing
-- **Network Protocols:** Implementing Git's smart HTTP protocol
-- **Binary Data Processing:** Parsing pack files and handling raw binary formats
-- **Software Architecture:** Modular design with clean separation of concerns
-
-## 🎓 Skills Demonstrated
-
-- C programming with manual memory management
-- Understanding of Git internals and version control systems
-- Network programming and HTTP protocol implementation
-- File I/O and filesystem operations
-- Debugging complex systems-level code
-- Working with industry-standard libraries (OpenSSL, zlib, libcurl)
-
-## 📝 Code Quality
-
-- Clean, readable code with consistent naming conventions
-- Comprehensive error handling
-- Memory leak prevention with proper resource cleanup
-- Modular architecture for maintainability
-- Professional documentation and comments
-
----
 
 **Built as part of the CodeCrafters "Build Your Own Git" challenge.**
